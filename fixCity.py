@@ -1,3 +1,4 @@
+# Has too many similar lines so it would be better to separate it
 def fixCityName(c):
     if "prish" in c.lower():
         return "Prishtinë"
