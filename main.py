@@ -5,46 +5,79 @@ import dbConnect
 import sys
 
 def main():
+    cities = ['Gjakove', 'Ferizaj', 'Prishtine', 'Gjilan', 'Viti']
+    years = ['2011', '2012', '2013', '2014']
+    # Debugging single files
+    #xlsPath = ['kontratat/Ferizaj/2013.xls']
     xlsPath = ['kontratat/Ferizaj/2011.xls', 'kontratat/Ferizaj/2012.xls', 'kontratat/Ferizaj/2013.xls', 'kontratat/Ferizaj/2014.xls', 'kontratat/Gjakove/2011.xls', 'kontratat/Gjakove/2012.xls', 'kontratat/Gjakove/2013.xls', 'kontratat/Gjakove/2014.xls', 'kontratat/Prishtine/2011.xls', 'kontratat/Prishtine/2012.xls', 'kontratat/Prishtine/2013.xls', 'kontratat/Prishtine/2014.xls', 'kontratat/Gjilan/2011.xls', 'kontratat/Gjilan/2012.xls', 'kontratat/Gjilan/2013.xls', 'kontratat/Gjilan/2014.xls', 'kontratat/Viti/2011.xls', 'kontratat/Viti/2012.xls', 'kontratat/Viti/2013.xls']
 
-# Connect to database
+    # Connect to database
     if not dbConnect.connect():
         print("Couldn't connect to database")
         sys.exit()
 
-# Curious to know how many contracts are there
+    # Curious to know how many contracts are there
     totalContracts = 0
 
     for xls in xlsPath:
+        # Debugging purposes
         print("Current XLS: " + xls)
-        firstRow = 1
+
+        firstRow = 0
         firstColumn = 0
 
-        workbook = xlrd.open_workbook(xls)
+        workbook = xlrd.open_workbook(xls, formatting_info=True)
         worksheet = workbook.sheet_by_index(0)
 
-        # Find worksheet's start row index
-        for i in range(1, 50):
-            # Check if the current cell is an instance of float so we can find the starting row
-            if isinstance(worksheet.cell(i, 2).value, float):
-                firstRow = i + 1
-                print("First row: " + str(i + 1))
+        rd_xf = workbook.xf_list[worksheet.cell_xf_index(26, 2)]
+        print(str(rd_xf.background.pattern_colour_index)) # 22 - gray, 9 - black
+        #print(workbook.colour_map[rd_xf.background.pattern_colour_index]) # RGB Format
+        """
+            Starts from row 50, and go down until the current cell isn't gray and adds one
+            which means it got to the first row.
+        """
+        for i in range(50, 1, -1):
+            rd_xf = workbook.xf_list[worksheet.cell_xf_index(i, 1)]
+            if not isinstance(worksheet.cell(i, 1).value, float):
+                firstRow = i + 2
                 break
 
-        # Find worksheet's start column index
+            if rd_xf.background.pattern_colour_index == 22:
+                firstRow = i + 1
+                break
+
+        # Debugging
+        print("First row: " + str(firstRow))
+
+        """
+            Starts from first column to the 20th and when it runs on a string
+            that means it got to the project name since evey cell before the project is an instance of float
+        """
         for i in range(3, 20):
-                # Find the first instance of string (contract name) I hope the string wont be higher than columns 20 lel
             if isinstance(worksheet.cell(firstRow, i).value, str):
                 firstColumn = i
-                print("First column: " + str(firstColumn))
                 break
-                print(xls)
+        # Debugging
+        print("First column: " + str(firstColumn))
+        
+        # If the first column is empty that means there is a gap between columns so add one index to the firstColumn
+        if worksheet.cell(firstRow, firstColumn).value == "":
+            firstColumn += 1
 
-        id = 1
+        count = 0
 
         # HARD-CODING all these numbers sucks gotta fix em later
         for i in range(firstRow, 500): # Check till the 500th row, change if there are potentially more
+            for tempCity in cities:
+                if tempCity in xls:
+                    city = tempCity
+            for tempYear in years:
+                if tempYear in xls:
+                    year = tempYear
+
             project = worksheet.cell(i, firstColumn).value
+            # firstColumn + 1 = date because project name is at firstColumn index, date is one column after it
+            # the same works for the other properties
             date = worksheet.cell(i, firstColumn + 1).value
             estimatedCost = worksheet.cell(i, firstColumn + 2).value
             cost = worksheet.cell(i, firstColumn + 3).value
@@ -53,7 +86,7 @@ def main():
             cLocation = worksheet.cell(i, firstColumn + 6).value
             isLocal = worksheet.cell(i, firstColumn + 7).value
 
-            # Viti has different syntax
+            # Viti has different syntax, so I need to add different indexes to the firstColumn
             if 'Viti/2011.xls' in xls or 'Viti/2012.xls' in xls or 'Viti/2013.xls' in xls or 'Viti/2014.xls' in xls:
                 estimatedCost = worksheet.cell(i, firstColumn + 3 + 2).value
                 cost = worksheet.cell(i, firstColumn + 3 + 3).value
@@ -62,13 +95,18 @@ def main():
                 cLocation = worksheet.cell(i, firstColumn + 3 + 6).value
                 isLocal = worksheet.cell(i, firstColumn + 3 + 7).value
 
+            # Some contracts have a blank line sometimes so to be on the safe side
+            # Check the one after the current one before deciding it's over
+            projectPlusOne = worksheet.cell(i + 1, firstColumn).value
             # Check if it got at the EOF then break
-            if project == '' or project.lower() == "totali :":
+            if (project == '' and projectPlusOne == '') or (project.lower() == 'totali :' or projectPlusOne.lower() == 'totali :'):
+                print("Current contract list contains: " + str(count) + " contracts.")
+                count = 1
                 break
             if annexCost == '':
                 annexCost = 0.0
 
-                # Fix city
+            # Fix city name
             cLocation = fixCity.fixCityName(cLocation)
 
             # Formatting
@@ -84,6 +122,8 @@ def main():
             contractor = contractor.replace('"', '')
             contractor = contractor.replace("'", '')
 
+            #print("Qyteti: " + city)
+            #print("Viti: " + year)
             #print("Emri i kontrates: " + project)
             #print("Data: " + str(date))
             #print("Vlera e paramenduar: " + str(estimatedCost))
@@ -93,8 +133,9 @@ def main():
             #print("Lokacioni i punekryesit: " + str(cLocation))
             #print("Vendore: " + str(bool(isLocal)) + "\n")
 
+
             print("Processing: " + str(xls) + " contract number: " + str(id))
-            id = id + 1
+            count = count + 1
             totalContracts = totalContracts + 1
             
             # Will work on these after I fix the database since decided to recreate it
@@ -111,6 +152,6 @@ def main():
                         #print(db.getLastQuery())
                     #db.insert("""INSERT INTO contractors("contractorName", "cityId", "isLocal")  VALUES('""" + contractor + """', '""" + str(row[0]) + """', '""" + str(bool(isLocal)) + """')""")
     print("TOTAL kontrata: " + str(totalContracts))
-
+    
 if __name__=="__main__":
     main()
