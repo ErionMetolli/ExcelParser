@@ -8,8 +8,8 @@ def main():
     cities = ['Gjakove', 'Ferizaj', 'Prishtine', 'Gjilan', 'Viti']
     years = ['2011', '2012', '2013', '2014']
     # Debugging single files
-    #xlsPath = ['kontratat/Ferizaj/2013.xls']
-    xlsPath = ['kontratat/Ferizaj/2011.xls', 'kontratat/Ferizaj/2012.xls', 'kontratat/Ferizaj/2013.xls', 'kontratat/Ferizaj/2014.xls', 'kontratat/Gjakove/2011.xls', 'kontratat/Gjakove/2012.xls', 'kontratat/Gjakove/2013.xls', 'kontratat/Gjakove/2014.xls', 'kontratat/Prishtine/2011.xls', 'kontratat/Prishtine/2012.xls', 'kontratat/Prishtine/2013.xls', 'kontratat/Prishtine/2014.xls', 'kontratat/Gjilan/2011.xls', 'kontratat/Gjilan/2012.xls', 'kontratat/Gjilan/2013.xls', 'kontratat/Gjilan/2014.xls', 'kontratat/Viti/2011.xls', 'kontratat/Viti/2012.xls', 'kontratat/Viti/2013.xls']
+    xlsPath = ['kontratat/Ferizaj/2013.xls']
+    #xlsPath = ['kontratat/Ferizaj/2011.xls', 'kontratat/Ferizaj/2012.xls', 'kontratat/Ferizaj/2013.xls', 'kontratat/Ferizaj/2014.xls', 'kontratat/Gjakove/2011.xls', 'kontratat/Gjakove/2012.xls', 'kontratat/Gjakove/2013.xls', 'kontratat/Gjakove/2014.xls', 'kontratat/Prishtine/2011.xls', 'kontratat/Prishtine/2012.xls', 'kontratat/Prishtine/2013.xls', 'kontratat/Prishtine/2014.xls', 'kontratat/Gjilan/2011.xls', 'kontratat/Gjilan/2012.xls', 'kontratat/Gjilan/2013.xls', 'kontratat/Gjilan/2014.xls', 'kontratat/Viti/2011.xls', 'kontratat/Viti/2012.xls', 'kontratat/Viti/2013.xls']
 
     # Connect to database
     if not dbConnect.connect():
@@ -65,6 +65,9 @@ def main():
             firstColumn += 1
 
         count = 0
+        estimatedSum = 0
+        costSum = 0
+        annexSum = 0
 
         # HARD-CODING all these numbers sucks gotta fix em later
         for i in range(firstRow, 500): # Check till the 500th row, change if there are potentially more
@@ -103,8 +106,31 @@ def main():
                 print("Current contract list contains: " + str(count) + " contracts.")
                 count = 1
                 break
+
+            # Some costs contain ’ instead of , and that throws an error when I try to cast float to cost
+            if isinstance(cost, str):
+                if '’' in cost or '€' in cost:
+                    cost = cost.replace('’', '')
+                    cost = cost.replace('€', '')
+            
+            if isinstance(estimatedCost, str):
+                if '’' in estimatedCost or '€' in estimatedCost:
+                    estimatedCost = estimatedCost.replace('’', '')
+                    estimatedCost = estimatedCost.replace('€', '')
+
+            # If it contains more than two dots (decimal points), split the value on decimal points and format it the right way
+            if str(estimatedCost).count('.') >= 2:
+                estimatedCost = str(estimatedCost).split('.')[0] + "," + str(estimatedCost).split('.')[1]
+            if str(cost).count('.') == 2:
+                cost = str(cost).split('.')[0] + str(cost).split('.')[1]
+
+            # If they contain no value, give them 0 because we need to cast to float later
             if annexCost == '':
                 annexCost = 0.0
+            if estimatedCost == '':
+                estimatedCost = 0.0
+            if cost == '':
+                cost = 0.0
 
             # Fix city name
             cLocation = fixCity.fixCityName(cLocation)
@@ -114,11 +140,11 @@ def main():
             project = project.replace('”', '')
             project = project.replace('“', '')
             project = project.replace('"', '')
+            project = project.replace("'", '')
 
             # Contractor
             contractor = contractor.replace('”', '')
             contractor = contractor.replace('“', '')
-      
             contractor = contractor.replace('"', '')
             contractor = contractor.replace("'", '')
 
@@ -133,8 +159,28 @@ def main():
             #print("Lokacioni i punekryesit: " + str(cLocation))
             #print("Vendore: " + str(bool(isLocal)) + "\n")
 
+            try:
+                estimatedSum = estimatedSum + float(estimatedCost)
+            except ValueError:
+                print(estimatedSum)
+                print("Value error in estimatedCost: " + estimatedCost)
+                sys.exit()
 
-            print("Processing: " + str(xls) + " contract number: " + str(id))
+            try:
+                costSum = costSum + float(cost)
+            except ValueError:
+                print(cost)
+                print("Value error in cost: " + cost)
+                sys.exit()
+
+            try:
+                annexSum = annexSum + float(annexCost)
+            except ValueError:
+                print(annexCost)
+                print("Value error in annexCost: " + annexCost)
+                sys.exit()
+
+            print("Processing: " + str(xls) + " contract number: " + str(count) + " row number: " + str(i))
             count = count + 1
             totalContracts = totalContracts + 1
             
@@ -152,6 +198,10 @@ def main():
                         #print(db.getLastQuery())
                     #db.insert("""INSERT INTO contractors("contractorName", "cityId", "isLocal")  VALUES('""" + contractor + """', '""" + str(row[0]) + """', '""" + str(bool(isLocal)) + """')""")
     print("TOTAL kontrata: " + str(totalContracts))
+    print("Total Estimated SUM: " + str(estimatedSum))
+    print("Total COST: " + str(costSum))
+    print("Total Annex COST: " + str(annexSum))
+    print("TOTAL: " + str(estimatedSum + costSum + annexSum))
     
 if __name__=="__main__":
     main()
