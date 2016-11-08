@@ -1,8 +1,9 @@
 #!/usr/bin/python3
 import xlrd
 import fixCity
-import dbConnect
 import sys
+import psycopg2
+import datetime
 
 def main():
     cities = ['Gjakove', 'Ferizaj', 'Prishtine', 'Gjilan', 'Viti']
@@ -12,16 +13,21 @@ def main():
     xlsPath = ['kontratat/Ferizaj/2011.xls', 'kontratat/Ferizaj/2012.xls', 'kontratat/Ferizaj/2013.xls', 'kontratat/Ferizaj/2014.xls', 'kontratat/Gjakove/2011.xls', 'kontratat/Gjakove/2012.xls', 'kontratat/Gjakove/2013.xls', 'kontratat/Gjakove/2014.xls', 'kontratat/Prishtine/2011.xls', 'kontratat/Prishtine/2012.xls', 'kontratat/Prishtine/2013.xls', 'kontratat/Prishtine/2014.xls', 'kontratat/Gjilan/2011.xls', 'kontratat/Gjilan/2012.xls', 'kontratat/Gjilan/2013.xls', 'kontratat/Gjilan/2014.xls', 'kontratat/Viti/2011.xls', 'kontratat/Viti/2012.xls', 'kontratat/Viti/2013.xls']
 
     # Connect to database
-    if not dbConnect.connect():
-        print("Couldn't connect to database")
+    connProperties = "dbname='opendatathon' user='pgsql' host='localhost' password='password'"
+    try:
+        conn = psycopg2.connect(connProperties)
+    except Exception as error:
+        print(error)
         sys.exit()
+    conn.autocommit = True
+    cur = conn.cursor()
 
     # Curious to know how many contracts are there
     totalContracts = 0
 
     for xls in xlsPath:
         # Debugging purposes
-        print("Current XLS: " + xls)
+        #print("Current XLS: " + xls)
 
         firstRow = 0
         firstColumn = 0
@@ -47,7 +53,7 @@ def main():
                 break
 
         # Debugging
-        print("First row: " + str(firstRow))
+        #print("First row: " + str(firstRow))
 
         """
             Starts from first column to the 20th and when it runs on a string
@@ -58,7 +64,7 @@ def main():
                 firstColumn = i
                 break
         # Debugging
-        print("First column: " + str(firstColumn))
+        #print("First column: " + str(firstColumn))
         
         # If the first column is empty that means there is a gap between columns so add one index to the firstColumn
         if worksheet.cell(firstRow, firstColumn).value == "":
@@ -149,6 +155,12 @@ def main():
 
             # Fix city name
             cLocation = fixCity.fixCityName(cLocation)
+            if cLocation == "I pacaktuar":
+                cLocation = city
+
+            # If there is no contractor or project name then continue
+            if contractor == '' or project == '':
+                continue
 
             # Formatting
             # Project
@@ -156,30 +168,53 @@ def main():
             project = project.replace('“', '')
             project = project.replace('"', '')
             project = project.replace("'", '')
+            project = project.replace('  ', '')
 
             # Contractor
             contractor = contractor.replace('”', '')
             contractor = contractor.replace('“', '')
             contractor = contractor.replace('"', '')
             contractor = contractor.replace("'", '')
+            contractor = contractor.replace('  ', '')
 
-            print("Qyteti: " + city)
-            print("Viti: " + year)
-            print("Emri i kontrates: " + project)
-            print("Data: " + str(date))
-            print("Vlera e paramenduar: " + str(estimatedCost))
-            print("Vlera e shpenzuar: " + str(cost))
-            print("Vlera e aneks kontrates: " + str(annexCost))
-            print("Punekryesi: " + str(contractor))
-            print("Lokacioni i punekryesit: " + str(cLocation))
-            print("Vendore: " + str(bool(isLocal)) + "\n")
+            # Formatting Date for postgresql support
+            if isinstance(date, str):
+                if not date == '' and date.count('.') == 2: 
+                    if date[0].isdigit():
+                        date = date.split('-')[0].replace('.', '/') # Some dates have intervals splitted with - so get the first date only, and then replace . with / so | 01.01.2016-01.02.2016 is formatted to 01/01/2016 also requires mdy (european date format) on postgresql.conf
+                    else:
+                        continue
+                else:
+                    continue
+            else:
+                continue
+            # Check if date is out of bounds
+            try:
+                datetime.datetime(day=int(date.split('/')[0]), month=int(date.split('/')[1]), year=int(date.split('/')[2]))
+            except ValueError:
+                print("Date out of bounds")
+                continue
+
+            # Avoid projects with more than 200 characters
+            if len(project) > 200:
+                continue
+
+            if sys.argv[1] == 'SHOW':
+                print("Qyteti: " + city)
+                print("Viti: " + year)
+                print("Emri i kontrates: " + project)
+                print("Data: " + str(date))
+                print("Vlera e paramenduar: " + str(estimatedCost))
+                print("Vlera e shpenzuar: " + str(cost))
+                print("Vlera e aneks kontrates: " + str(annexCost))
+                print("Punekryesi: " + str(contractor))
+                print("Lokacioni i punekryesit: " + str(cLocation))
+                print("Vendore: " + str(bool(isLocal)) + "\n")
 
             try:
                 estimatedSum = estimatedSum + float(estimatedCost)
             except ValueError:
-                print(estimatedSum)
                 print("Value error in estimatedCost: " + estimatedCost)
-                print(project)
                 sys.exit()
 
             try:
@@ -187,40 +222,72 @@ def main():
             except ValueError:
                 if isinstance(cost, str):
                     continue
-                print(cost)
                 print("Value error in cost: " + cost)
                 sys.exit()
 
             try:
                 annexSum = annexSum + float(annexCost)
             except ValueError:
-                print(annexCost)
                 print("Value error in annexCost: " + annexCost)
-                print("Current: " + str(project))
                 sys.exit()
 
-            #print("Processing: " + str(xls) + " contract number: " + str(count) + " row number: " + str(i))
+            print("Processing: " + str(xls) + " contract number: " + str(count) + " row number: " + str(i))
             count = count + 1
             totalContracts = totalContracts + 1
             
-            # Will work on these after I fix the database since decided to recreate it
+            #This insert statement was used to insert cities (no duplicates) in the database
+            if sys.argv[1] == 'INSERTCITIES': # INSERT cities, DATABASE cities
+                cur.execute("""INSERT INTO cities("name") SELECT '""" + cLocation + """' WHERE NOT EXISTS (SELECT "name" FROM cities WHERE "name" = '""" + cLocation + """');""")
 
-            # This insert statement was used to insert cities (no duplicates) in the database
-            # db.insert("""INSERT INTO cities("cityName") SELECT '""" + cLocation + """' WHERE NOT EXISTS (SELECT "cityName" FROM cities WHERE "cityName" = '""" + cLocation + """');""")
-            
-            # Fetch cities because we need to get the corresponding cityId
-                # db.select("""SELECT * FROM cities""")
-            # Loop through cities and find the cityId that corresponds to cLocation
-            # for row in db.rows:
-                #if row[1] == cLocation: # row[0] is cityId, row[1] is cityName so we need to check cityName for equality with cLocation
-                    #db.insert("""INSERT INTO contractors("contractorName", "cityId", "isLocal") SELECT '""" + contractor + """', '""" + str(row[0])  + """', '""" + str(bool(isLocal)) + """' WHERE NOT EXISTS (SELECT "contractorName" FROM contractors WHERE "contractorName" = '""" + contractor +  """');""")
-                        #print(db.getLastQuery())
-                    #db.insert("""INSERT INTO contractors("contractorName", "cityId", "isLocal")  VALUES('""" + contractor + """', '""" + str(row[0]) + """', '""" + str(bool(isLocal)) + """')""")
-    print("TOTAL kontrata: " + str(totalContracts))
+            elif sys.argv[1] == 'INSERTCONTRACTORS':
+                # Loop through cities and find the city id that corresponds to cLocation
+                cur.execute("""SELECT * FROM cities""")
+                rows = cur.fetchall()
+                for row in rows:
+                    # row[0] is cityId, row[1] is cityName so we need to check cityName for equality with cLocation
+                    if row[1] == cLocation:
+                        cur.execute("""INSERT INTO contractors("name", "cityid", "islocal") SELECT '""" + contractor + """', '""" + str(row[0]) + """', '""" + str(bool(isLocal)) + """' WHERE NOT EXISTS (SELECT "name" FROM contractors WHERE "name" = '""" + contractor + """');""")
+
+            elif sys.argv[1] == 'INSERTPROJECTS':
+                # Need two cursors here because I have two foreign keys and I need the ids from both of them in a single query, maybe could have done it a better way but I dont need optimization here since its gonna be a one time run script
+                cur.execute("""SELECT id, name FROM cities""")
+                rows = cur.fetchall()
+                # Second cursor is for contractors
+                cur1 = conn.cursor()
+                cur1.execute("""SELECT id, name FROM contractors""")
+                cRows = cur1.fetchall()
+                # First loops through cities, to find the corresponding city to use that city's id in the insert query
+                for cityRow in rows:
+                    if cityRow[1] == cLocation:
+                        # Once it finds the city that equals to the project location, create another loop which iterates through contractors, doing the same thing as the city iteration
+                        for contractorRow in cRows:
+                            if contractorRow[1] == contractor:
+                                cur.execute("""INSERT INTO projects("name", "date", "cityid", "year", "estimatedcost", "finalcost", "annexcost", "contractorid") SELECT '""" + project + """', '""" + date + """', '""" + str(cityRow[0]) + """', '""" + str(year) + """', '""" + str(estimatedCost) + """', '""" + str(cost) + """', '""" + str(annexCost) + """', '""" + str(contractorRow[0]) + """' WHERE NOT EXISTS (SELECT "name" FROM projects WHERE "name" = '""" + project + """');""")
+
+    print("Total count of contracts: " + str(totalContracts))
     print("Total Estimated SUM: " + str(estimatedSum))
     print("Total COST: " + str(costSum))
     print("Total Annex COST: " + str(annexSum))
     print("TOTAL: " + str(costSum + annexSum))
     
+
+def help():
+    help = """Usage:
+        ./main.py [COMMAND]
+        
+        [COMMAND]
+            1. INSERTCITIES      | Inserts every city that it finds in the excel files in cities table;
+            2. INSERTPROJECTS    | Inserts every project that it finds in the excel files in projects table;
+            3. INSERTCONTRACTORS | Inserts every contractor that is associated with at least one project in contractors table,
+            4. SHOW              | Shows every project that it can find and informations about them"""
+    print(help)
+
+
 if __name__=="__main__":
+    # Use sys.argv just to check if the first argument was written
+    try:
+        sys.argv[1]
+    except:
+        help()
+        sys.exit()
     main()
