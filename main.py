@@ -79,6 +79,13 @@ def main():
         for i in range(firstRow, 500): # Check till the 500th row, change if there are potentially more
             for tempCity in cities:
                 if tempCity in xls:
+                    if "prishtine" in tempCity.lower():
+                        city = "Prishtinë"
+                    elif "gjakove" in tempCity.lower():
+                        city = "Gjakovë"
+                        # Gjilan and Viti dont have ë's in their names
+                    else:
+                        city = tempCity
                     city = tempCity
             for tempYear in years:
                 if tempYear in xls:
