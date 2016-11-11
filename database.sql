@@ -17,13 +17,12 @@ CREATE TABLE projects
     id INTEGER PRIMARY KEY NOT NULL,
     name VARCHAR(200),
     date DATE,
-    cityid INTEGER,
+    city VARCHAR(20),
     year INTEGER,
     estimatedcost DOUBLE PRECISION,
     finalcost DOUBLE PRECISION,
     annexcost DOUBLE PRECISION,
     contractorid INTEGER,
-    CONSTRAINT projects_cities_id_fk FOREIGN KEY (cityid) REFERENCES cities (id),
     CONSTRAINT projects_contractors_id_fk FOREIGN KEY (contractorid) REFERENCES contractors (id)
 );
 CREATE UNIQUE INDEX projects_id_uindex ON projects (id);

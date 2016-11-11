@@ -249,20 +249,12 @@ def main():
                         cur.execute("""INSERT INTO contractors("name", "cityid", "islocal") SELECT '""" + contractor + """', '""" + str(row[0]) + """', '""" + str(bool(isLocal)) + """' WHERE NOT EXISTS (SELECT "name" FROM contractors WHERE "name" = '""" + contractor + """');""")
 
             elif sys.argv[1] == 'INSERTPROJECTS':
-                # Need two cursors here because I have two foreign keys and I need the ids from both of them in a single query, maybe could have done it a better way but I dont need optimization here since its gonna be a one time run script
-                cur.execute("""SELECT id, name FROM cities""")
+                cur.execute("""SELECT id, name FROM contractors""")
                 rows = cur.fetchall()
-                # Second cursor is for contractors
-                cur1 = conn.cursor()
-                cur1.execute("""SELECT id, name FROM contractors""")
-                cRows = cur1.fetchall()
                 # First loops through cities, to find the corresponding city to use that city's id in the insert query
-                for cityRow in rows:
-                    if cityRow[1] == cLocation:
-                        # Once it finds the city that equals to the project location, create another loop which iterates through contractors, doing the same thing as the city iteration
-                        for contractorRow in cRows:
-                            if contractorRow[1] == contractor:
-                                cur.execute("""INSERT INTO projects("name", "date", "cityid", "year", "estimatedcost", "finalcost", "annexcost", "contractorid") SELECT '""" + project + """', '""" + date + """', '""" + str(cityRow[0]) + """', '""" + str(year) + """', '""" + str(estimatedCost) + """', '""" + str(cost) + """', '""" + str(annexCost) + """', '""" + str(contractorRow[0]) + """' WHERE NOT EXISTS (SELECT "name" FROM projects WHERE "name" = '""" + project + """');""")
+                for contractorRow in rows:
+                    if contractorRow[1] == contractor:
+                        cur.execute("""INSERT INTO projects("name", "date", "city", "year", "estimatedcost", "finalcost", "annexcost", "contractorid") SELECT '""" + project + """', '""" + date + """', '""" + city + """', '""" + str(year) + """', '""" + str(estimatedCost) + """', '""" + str(cost) + """', '""" + str(annexCost) + """', '""" + str(contractorRow[0]) + """' WHERE NOT EXISTS (SELECT "name" FROM projects WHERE "name" = '""" + project + """');""")
 
     print("Total count of contracts: " + str(totalContracts))
     print("Total Estimated SUM: " + str(estimatedSum))
